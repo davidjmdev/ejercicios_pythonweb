@@ -1,6 +1,6 @@
-ip_test = "192.168.3.222"
+ip_test = "192.168.33.222"
 
-def ip_tester(ip):
+def ip_tester(ip) -> bool:
     octetos = ip.split(".")
     if len(octetos) != 4:
         return False
