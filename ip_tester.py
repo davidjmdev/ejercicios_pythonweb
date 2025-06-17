@@ -1,4 +1,4 @@
-ip_test = "192.168.1.255"
+ip_test = "192.168.1.222"
 
 def ip_tester(ip):
     octetos = ip.split(".")
@@ -9,7 +9,7 @@ def ip_tester(ip):
             octeto = int(octeto)
         except ValueError:
             return False
-        if int(octeto) > 255 or int(octeto) < 0:
+        if octeto > 255 or octeto < 0:
                 return False
     return True
 
