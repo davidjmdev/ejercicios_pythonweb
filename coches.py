@@ -1,3 +1,5 @@
+import dataclasses
+
 class Coche:
     def __init__(self, marca:str, modelo:str, color:str):
         self.marca = marca
@@ -11,11 +13,11 @@ class Coche:
         else:
             print(f"El {self.marca} {self.modelo} lo conduce {self.conductor.nombre}")
 
+@dataclasses.dataclass
 class Conductor:
-    def __init__(self, nombre:str, edad:int, carnet:bool):
-        self.nombre = nombre
-        self.edad = edad
-        self.carnet = carnet
+    nombre: str
+    edad : int
+    carnet: bool
 
     def conducir(self, coche:Coche):
         if self.carnet == True:
