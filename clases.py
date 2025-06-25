@@ -12,14 +12,27 @@ class Mascota:
     def dame_nombre(self):
         return self.nombre
 
-Tuna = Mascota("Tuna", "Gato")
-Tuna.edad = 3
 
-print(Tuna.edad)
+class Personaje:
+    def __init__(self, nombre: str, vida: int, daño: int):
+        self.nombre = nombre
+        self.vida = vida
+        self.daño = daño
+    
+    def recibir_daño(self, daño_recibido: int):
+        self.vida -= daño_recibido
+        if self.vida <= 0:
+            print(f"{self.nombre} ha perdido")
 
-print(Tuna.edad_humana)
 
-Tuna.calcular_edad_humana()
-print(Tuna.edad_humana)
+def combatir(atacante: Personaje, defensor: Personaje):
+    defensor.recibir_daño(atacante.daño)
 
-print(Tuna.dame_nombre())
+superman = Personaje("Superman", 1000, 100)
+rompetechos = Personaje("Rompetechos", 2000, 200)
+
+print(rompetechos.vida)
+
+combatir(superman,rompetechos)
+
+print(rompetechos.vida)
