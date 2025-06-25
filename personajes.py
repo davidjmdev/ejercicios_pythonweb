@@ -1,20 +1,5 @@
 import random
 
-class Mascota:
-    def __init__(self, nombre: str, animal: str):
-        self.nombre = nombre
-        self.animal = animal
-        self.raza = None
-        self.edad = None
-        self.edad_humana = None
-
-    def calcular_edad_humana(self):
-        self.edad_humana = self.edad * 7
-    
-    def dame_nombre(self):
-        return self.nombre
-
-
 class Personaje:
     def __init__(self, nombre: str, vida: int, daño: int):
         self.nombre = nombre
