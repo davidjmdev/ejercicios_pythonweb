@@ -5,6 +5,12 @@ class Coche:
         self.color = color
         self.conductor = None
 
+    def mostrar_nombre_conductor(self):
+        if self.conductor == None:
+            print("No hay nadie al volante")
+        else:
+            print(f"El {self.marca} {self.modelo} lo conduce {self.conductor.nombre}")
+
 class Conductor:
     def __init__(self, nombre:str, edad:int, carnet:bool):
         self.nombre = nombre
@@ -18,10 +24,9 @@ class Conductor:
             print("No puedes conducir sin carnet")
 
 
-
 Ibiza = Coche("Seat", "Ibiza", "Amarillo")
-Pedro = Conductor("Pedro", 20, True)
+Pedro = Conductor("Pedro", edad=20, carnet=True)
 
 Pedro.conducir(Ibiza)
 
-print(Ibiza.conductor.nombre)
+Ibiza.mostrar_nombre_conductor()
