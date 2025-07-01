@@ -1,110 +1,194 @@
 from __future__ import annotations
 import os
 import json
+from abc import ABC, abstractmethod
+from typing import Protocol, List, Dict, Optional
 
-ruta_DB = "json_db.json"
+# ——— Interfaces / Protocolos —————————————————————————————————————————————
+class IDataStore(Protocol):
+    """Abstracción para persistencia de datos."""
+    def load(self) -> Dict[str, dict]: ...
+    def save(self, data: Dict[str, dict]) -> None: ...
 
-class Inquilino:
-    def __init__(self, DNI:str, nombre:str, vivienda:Vivienda):
-        self.DNI = DNI
-        self.nombre = nombre
-        self.vivienda = vivienda
+# ——— Implementaciones de IDataStore ——————————————————————————————————————
+class JsonDataStore(IDataStore):
+    """Implementa IDataStore usando un fichero JSON."""
+    def __init__(self, path: str):
+        self._path = path
 
-class Vivienda:
-    def __init__(self, num_catastro:int, ciudad:str, direccion:str, inquilinos:list):
-        self.num_catastro = num_catastro
-        self.ciudad = ciudad
-        self.direccion = direccion
-        self.inquilinos = inquilinos
-
-    def añadir_inquilino(self, inquilino:Inquilino):
-        self.inquilinos.append(inquilino)
-    
-    def borrar_inquilino(self, inquilino:Inquilino):
-        self.inquilinos.pop(inquilino)
-
-
-class json_DB:
-    def __init__(self, ruta:str):
-        self.ruta = ruta
-    
-    def cargar(self) -> dict:
+    def load(self) -> Dict[str, dict]:
         try:
-            with open(self.ruta, "r") as archivo:
-                return json.load(archivo)
+            with open(self._path, "r", encoding="utf-8") as f:
+                return json.load(f)
         except FileNotFoundError:
             return {}
 
-    def guardar(self, dict_json:dict):
-        with open(self.ruta, "w") as archivo:
-            json.dump(dict_json, archivo)
+    def save(self, data: Dict[str, dict]) -> None:
+        with open(self._path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
 
+# ——— Modelo de Dominio ———————————————————————————————————————————————
+class Inquilino:
+    def __init__(self, dni: str, nombre: str):
+        self.dni = dni
+        self.nombre = nombre
 
+    def to_dict(self) -> dict:
+        return {"dni": self.dni, "nombre": self.nombre}
 
-def limpiar_pantalla():
-    os.system('cls' if os.name == 'nt' else 'clear')
+    @staticmethod
+    def from_dict(d: dict) -> Inquilino:
+        return Inquilino(dni=d["dni"], nombre=d["nombre"])
 
+class Vivienda:
+    def __init__(self, num_catastro: str, ciudad: str, direccion: str):
+        self.num_catastro = num_catastro
+        self.ciudad = ciudad
+        self.direccion = direccion
+        self._inquilinos: List[Inquilino] = []
 
-def nueva_vivienda(num_catastro:str, ciudad:str, direccion:str, db:json_DB):
-    dict_json = db.cargar()
-    dict_json[num_catastro] = {"ciudad":ciudad, "direccion":direccion, "inquilinos":[]}
-    db.guardar(dict_json)
+    @property
+    def inquilinos(self) -> List[Inquilino]:
+        return list(self._inquilinos)  # inmutable desde fuera
 
-def consultar_viviendas(db:json_DB):
-    dict_viviendas = db.cargar()
-    limpiar_pantalla()
-    print(dict_viviendas)
+    def add_inquilino(self, inq: Inquilino) -> None:
+        if any(i.dni == inq.dni for i in self._inquilinos):
+            raise ValueError(f"Inquilino {inq.dni} ya existe.")
+        self._inquilinos.append(inq)
 
-def consultar_inquilinos(db:json_DB):
-    dict_viviendas = db.cargar()
-    limpiar_pantalla()
-    vivienda = int(input("Introduce el número de catastro de la vivienda que deseas consultar"))
-    print(dict_viviendas[vivienda]["inquilinos"])
+    def remove_inquilino(self, dni: str) -> None:
+        original = len(self._inquilinos)
+        self._inquilinos = [i for i in self._inquilinos if i.dni != dni]
+        if len(self._inquilinos) == original:
+            raise KeyError(f"No existe inquilino con DNI {dni}.")
 
-menu = """Qué desesas hacer:
-1- Consultar las viviendas disponibles
-2- Consultar los inquilinos de una vivienda
-3- Añadir una nueva vivienda
-4- Añadir un nuevo inquilino
-5- Borrar un inquilino
-6- Salir
+    def to_dict(self) -> dict:
+        return {
+            "ciudad": self.ciudad,
+            "direccion": self.direccion,
+            "inquilinos": [i.to_dict() for i in self._inquilinos]
+        }
 
-"""
+    @staticmethod
+    def from_dict(num_catastro: str, d: dict) -> Vivienda:
+        v = Vivienda(num_catastro, d["ciudad"], d["direccion"])
+        for inq_d in d.get("inquilinos", []):
+            v.add_inquilino(Inquilino.from_dict(inq_d))
+        return v
 
-opcion = 0
+# ——— Gestor de Negocio ——————————————————————————————————————————————
+class RentalManager:
+    def __init__(self, datastore: IDataStore):
+        self._ds = datastore
+        self._cache: Dict[str, Vivienda] = {}
 
-while opcion != 6:
-    limpiar_pantalla()
-    try:
-        opcion = int(input(menu))
-    except ValueError:
-        print("Opción no valida")
-        input()
-        continue
-    
-    if opcion == 1:
-        db = json_DB(ruta_DB)
-        consultar_viviendas(db)
-        input()
-    elif opcion == 2:
-        db = json_DB(ruta_DB)
-        consultar_inquilinos(db)
-        input()
-    elif opcion == 3:
-        num_catastro = input("Introduce el número del catastro: ")
-        ciudad = input("Introduce la ciudad: ")
-        direccion = input("Introduce la dirección: ")
+    def _load_all(self) -> None:
+        raw = self._ds.load()
+        self._cache = {
+            nc: Vivienda.from_dict(nc, d)
+            for nc, d in raw.items()
+        }
 
-        db = json_DB(ruta_DB)
-        nueva_vivienda(num_catastro, ciudad, direccion, db)
-    elif opcion == 4:
-        pass
-    elif opcion == 5:
-        pass
-    elif opcion == 6:
-        pass
-    else:
-        print("Opción no valida")
-        input()
+    def _persist(self) -> None:
+        serialized = {
+            nc: v.to_dict()
+            for nc, v in self._cache.items()
+        }
+        self._ds.save(serialized)
 
+    def list_viviendas(self) -> List[Vivienda]:
+        self._load_all()
+        return list(self._cache.values())
 
+    def list_inquilinos(self, num_catastro: str) -> List[Inquilino]:
+        self._load_all()
+        if num_catastro not in self._cache:
+            raise KeyError("Vivienda no encontrada.")
+        return self._cache[num_catastro].inquilinos
+
+    def create_vivienda(self, num_catastro: str, ciudad: str, direccion: str) -> None:
+        self._load_all()
+        if num_catastro in self._cache:
+            raise KeyError("Ya existe esa vivienda.")
+        self._cache[num_catastro] = Vivienda(num_catastro, ciudad, direccion)
+        self._persist()
+
+    def add_inquilino(self, num_catastro: str, dni: str, nombre: str) -> None:
+        self._load_all()
+        if num_catastro not in self._cache:
+            raise KeyError("Vivienda no encontrada.")
+        self._cache[num_catastro].add_inquilino(Inquilino(dni, nombre))
+        self._persist()
+
+    def remove_inquilino(self, num_catastro: str, dni: str) -> None:
+        self._load_all()
+        if num_catastro not in self._cache:
+            raise KeyError("Vivienda no encontrada.")
+        self._cache[num_catastro].remove_inquilino(dni)
+        self._persist()
+
+# ——— Interfaz de Usuario (CLI) —————————————————————————————————————————
+class CLI:
+    def __init__(self, manager: RentalManager):
+        self.mgr = manager
+
+    def clear(self):
+        os.system('cls' if os.name == 'nt' else 'clear')
+
+    def pause(self):
+        input("\nPulsa Enter para continuar...")
+
+    def run(self):
+        menu = (
+            "\nQué deseas hacer:\n"
+            "1- Listar viviendas\n"
+            "2- Mostrar inquilinos de una vivienda\n"
+            "3- Añadir nueva vivienda\n"
+            "4- Añadir nuevo inquilino\n"
+            "5- Borrar un inquilino\n"
+            "6- Salir\n"
+            "Opción: "
+        )
+        while True:
+            self.clear()
+            opcion = input(menu)
+            try:
+                if opcion == "1":
+                    for v in self.mgr.list_viviendas():
+                        print(f"{v.num_catastro}: {v.ciudad}, {v.direccion}")
+                elif opcion == "2":
+                    nc = input("Catastro: ")
+                    for i in self.mgr.list_inquilinos(nc):
+                        print(f"{i.dni} — {i.nombre}")
+                elif opcion == "3":
+                    nc = input("Catastro: ")
+                    ciudad = input("Ciudad: ")
+                    direc = input("Dirección: ")
+                    self.mgr.create_vivienda(nc, ciudad, direc)
+                    print("Vivienda creada.")
+                elif opcion == "4":
+                    nc = input("Catastro: ")
+                    dni = input("DNI: ")
+                    nombre = input("Nombre: ")
+                    self.mgr.add_inquilino(nc, dni, nombre)
+                    print("Inquilino añadido.")
+                elif opcion == "5":
+                    nc = input("Catastro: ")
+                    dni = input("DNI del inquilino a borrar: ")
+                    self.mgr.remove_inquilino(nc, dni)
+                    print("Inquilino borrado.")
+                elif opcion == "6":
+                    break
+                else:
+                    print("Opción no válida.")
+            except Exception as e:
+                print(f"¡Error! {e}")
+            self.pause()
+
+# ——— Punto de entrada —————————————————————————————————————————————————
+if __name__ == "__main__":
+    DB_PATH = "json_db.json"
+    datastore = JsonDataStore(DB_PATH)             # ⇦ Inyección de dependencia
+    manager = RentalManager(datastore)             # ⇦ Manager de negocio
+    cli = CLI(manager)                             # ⇦ Capa de presentación
+    cli.run()
